@@ -241,6 +241,55 @@
       animation: pulse 1.2s infinite;
     }
 
+    /* ── QR Overlay ── */
+    #qr-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    #qr-overlay.show { display: flex; }
+    .qr-overlay-box {
+      background: var(--card);
+      border: 2px solid var(--accent);
+      border-radius: 20px;
+      padding: 28px 32px;
+      text-align: center;
+      max-width: 320px;
+      width: 90%;
+    }
+    .qr-overlay-box img {
+      width: 180px;
+      height: 180px;
+      border-radius: 10px;
+      border: 3px solid var(--accent);
+      background: #fff;
+      margin-bottom: 12px;
+    }
+    .qr-overlay-code {
+      font-size: 2.8rem;
+      font-weight: 900;
+      letter-spacing: 0.3em;
+      color: var(--accent);
+      font-family: 'Courier New', monospace;
+      margin-bottom: 6px;
+    }
+    .qr-overlay-close {
+      margin-top: 16px;
+      background: var(--border);
+      border: none;
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 24px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .qr-overlay-close:hover { background: var(--accent); }
+
     /* ── Fullscreen ── */
     .btn-fs {
       background: var(--border);
@@ -363,6 +412,18 @@
 <body>
 
 <div id="conn-badge">⚪ —</div>
+
+<!-- QR overlay per riconnessione partecipanti -->
+<div id="qr-overlay" onclick="if(event.target===this)toggleQR()">
+  <div class="qr-overlay-box">
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:10px">📱 Scansiona per partecipare</p>
+    <img id="qr-overlay-img" src="" alt="QR">
+    <div class="qr-overlay-code" id="qr-overlay-code"></div>
+    <p style="color:var(--muted);font-size:0.8rem">oppure digita questo codice</p>
+    <button class="qr-overlay-close" onclick="toggleQR()">✕ Chiudi</button>
+  </div>
+</div>
+
 <div id="app"></div>
 
 <script>
@@ -644,8 +705,9 @@ function renderActiveQ() {
   document.getElementById('app').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <span style="color:var(--muted);font-size:0.88rem">Sala: <strong style="color:var(--accent)">${S.roomCode}</strong></span>
-      <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
         <span class="live-badge">● LIVE</span>
+        <button class="btn-fs" onclick="toggleQR()" title="Mostra QR">📱</button>
         <button class="btn-fs" onclick="toggleFS()" title="Schermo intero">⛶</button>
       </div>
     </div>
@@ -794,6 +856,23 @@ function submitVote(answerIndex) {
   setTimeout(() => {
     if (S.screen === 'participant_voted') setState('participant_waiting');
   }, 2200);
+}
+
+/* ══════════════════════════════════════════════
+   QR OVERLAY
+══════════════════════════════════════════════ */
+function toggleQR() {
+  const overlay = document.getElementById('qr-overlay');
+  const isOpen  = overlay.classList.contains('show');
+  if (!isOpen) {
+    const pageUrl  = window.location.href;
+    const baseUrl  = pageUrl.split('?')[0];
+    const qrUrl    = baseUrl + '?mode=participant';
+    const qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=6c63ff&bgcolor=ffffff&data=' + encodeURIComponent(qrUrl);
+    document.getElementById('qr-overlay-img').src  = qrImgUrl;
+    document.getElementById('qr-overlay-code').textContent = S.roomCode || '';
+  }
+  overlay.classList.toggle('show');
 }
 
 /* ══════════════════════════════════════════════
