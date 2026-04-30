@@ -24,7 +24,7 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -33,6 +33,23 @@
     }
 
     #app { width: 100%; max-width: 600px; }
+
+    /* partecipante: card occupa tutta altezza disponibile */
+    .fullh-card {
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100dvh - 80px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 20px 24px;
+    }
+    .fullh-card .answer-btn {
+      flex: 1;
+      margin-bottom: 10px;
+      font-size: 1.2rem;
+    }
+    .fullh-card .answer-btn:last-child { margin-bottom: 0; }
 
     .logo { text-align: center; margin-bottom: 28px; }
     .logo h1 {
@@ -773,14 +790,16 @@ function renderQuestion() {
   if (!S.currentQ) return renderWaiting();
   const q = S.currentQ;
   return `
-    <div class="card">
-      <div class="tag">DOMANDA ${q.index+1} / ${QUESTIONS.length}</div>
-      <h2 style="font-size:1.15rem;line-height:1.5;font-weight:700;margin-bottom:22px">${q.text}</h2>
-      ${OPTIONS.map((o,i) => `
-        <button class="answer-btn" onclick="submitVote(${i})">
-          <span class="em">${o.emoji}</span>
-          <span>${o.label}</span>
-        </button>`).join('')}
+    <div class="fullh-card">
+      <div class="tag" style="align-self:flex-start;margin-bottom:14px">DOMANDA ${q.index+1} / ${QUESTIONS.length}</div>
+      <h2 style="font-size:1.25rem;line-height:1.5;font-weight:700;margin-bottom:24px">${q.text}</h2>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:10px">
+        ${OPTIONS.map((o,i) => `
+          <button class="answer-btn" style="flex:1;margin-bottom:0" onclick="submitVote(${i})">
+            <span class="em">${o.emoji}</span>
+            <span>${o.label}</span>
+          </button>`).join('')}
+      </div>
     </div>`; }
 
 /* ── PARTICIPANT VOTED ── */
