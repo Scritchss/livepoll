@@ -454,7 +454,10 @@ function initPubNub(roomCode, role) {
     status(st) {
       if (st.category === 'PNConnectedCategory') {
         setConn(true);
-        if (role === 'presenter') scheduleHeartbeat();
+        if (role === 'presenter') {
+          scheduleHeartbeat();
+          if (S.screen === 'presenter_room') render(); // aggiorna badge nella card
+        }
       } else if (['PNNetworkDownCategory','PNNetworkIssuesCategory'].includes(st.category)) {
         setConn(false, '🔴 Offline');
       } else if (st.category === 'PNReconnectedCategory') {
