@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>LivePoll 🗳️</title>
+  <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f1a;
+      --card: #1e1e30;
+      --accent: #6c63ff;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --border: #2d2d45;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px 16px 40px;
+    }
+
+    #app { width: 100%; max-width: 600px; }
+
+    .logo { text-align: center; margin-bottom: 28px; }
+    .logo h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #6c63ff, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .logo p { color: var(--muted); margin-top: 4px; font-size: 0.95rem; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 14px;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      margin-bottom: 10px;
+      letter-spacing: 0.01em;
+    }
+    .btn:last-child { margin-bottom: 0; }
+    .btn:active { transform: scale(0.98); }
+    .btn:hover { opacity: 0.88; }
+    .btn-primary  { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-danger   { background: #7f1d1d; color: #fca5a5; }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 1.5rem;
+      text-align: center;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      outline: none;
+      margin-bottom: 14px;
+    }
+    input:focus { border-color: var(--accent); }
+
+    .room-code {
+      text-align: center;
+      font-size: 4.5rem;
+      font-weight: 900;
+      letter-spacing: 0.35em;
+      color: var(--accent);
+      padding: 20px 0;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 30px rgba(108,99,255,0.4);
+    }
+
+    .qr-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 16px 0;
+    }
+    .qr-wrap img {
+      border-radius: 12px;
+      border: 4px solid var(--accent);
+      width: 200px;
+      height: 200px;
+      background: #fff;
+    }
+    .qr-label {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-top: 8px;
+    }
+    .qr-url {
+      color: var(--accent);
+      font-size: 0.75rem;
+      word-break: break-all;
+      text-align: center;
+      margin-top: 4px;
+      max-width: 280px;
+    }
+    .local-warn {
+      background: #451a03;
+      border: 1px solid var(--yellow);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: #fde68a;
+      margin: 12px 0;
+      text-align: center;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      background: var(--accent);
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .error-msg {
+      color: #fca5a5;
+      font-size: 0.9rem;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    /* ── Presenter: questions list ── */
+    .question-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .question-item:last-child { border-bottom: none; }
+    .q-num {
+      min-width: 26px;
+      height: 26px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .q-num.done { background: var(--green); }
+    .q-text { flex: 1; font-size: 0.92rem; line-height: 1.4; }
+    .btn-avvia {
+      padding: 6px 13px;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .btn-avvia:hover { opacity: 0.82; }
+
+    /* ── Active question (presenter) ── */
+    .active-card {
+      background: linear-gradient(135deg, #1e1e40, #2a1e40);
+      border: 2px solid var(--accent);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 14px;
+    }
+    .active-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.45;
+      margin-bottom: 20px;
+    }
+    .bar-wrap { margin-bottom: 11px; }
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.88rem;
+      margin-bottom: 4px;
+    }
+    .bar-track {
+      height: 22px;
+      background: var(--border);
+      border-radius: 11px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 11px;
+      transition: width 0.45s ease;
+      min-width: 0;
+    }
+    .fill-green  { background: var(--green); }
+    .fill-yellow { background: var(--yellow); }
+    .fill-red    { background: var(--red); }
+    .vote-total {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.88rem;
+      margin-top: 10px;
+    }
+    .live-badge {
+      font-size: 0.82rem;
+      color: var(--green);
+      animation: pulse 1.2s infinite;
+    }
+
+    /* ── Fullscreen ── */
+    .btn-fs {
+      background: var(--border);
+      border: none;
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1.1rem;
+      padding: 6px 12px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .btn-fs:hover { background: var(--accent); }
+
+    /* fullscreen layout — big screen mode */
+    :fullscreen #app,
+    :-webkit-full-screen #app {
+      max-width: 900px;
+      margin: 0 auto;
+      padding-top: 40px;
+    }
+    :fullscreen body,
+    :-webkit-full-screen body {
+      justify-content: center;
+    }
+    :fullscreen .active-title,
+    :-webkit-full-screen .active-title {
+      font-size: 2rem;
+    }
+    :fullscreen .bar-fill,
+    :-webkit-full-screen .bar-fill {
+      /* bars already have transition */
+    }
+    :fullscreen .bar-track,
+    :-webkit-full-screen .bar-track {
+      height: 40px;
+      border-radius: 20px;
+    }
+    :fullscreen .bar-label,
+    :-webkit-full-screen .bar-label {
+      font-size: 1.2rem;
+    }
+    :fullscreen .vote-total,
+    :-webkit-full-screen .vote-total {
+      font-size: 1.1rem;
+    }
+    :fullscreen .active-card,
+    :-webkit-full-screen .active-card {
+      padding: 36px;
+    }
+
+    /* ── Participant ── */
+    .answer-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      padding: 18px 20px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--text);
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: border-color 0.15s, transform 0.1s;
+      text-align: left;
+    }
+    .answer-btn:last-child { margin-bottom: 0; }
+    .answer-btn:hover  { border-color: var(--accent); transform: translateX(3px); }
+    .answer-btn:active { transform: scale(0.98); }
+    .answer-btn .em    { font-size: 1.9rem; }
+
+    /* ── Progress dots ── */
+    .progress { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .pdot {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--border);
+      font-size: 0.65rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+    .pdot.done   { background: var(--green); }
+    .pdot.active { background: var(--accent); animation: pulse 1s infinite; }
+
+    /* ── Waiting ── */
+    .waiting { text-align: center; padding: 32px 0; }
+    .waiting-icon { font-size: 3.5rem; margin-bottom: 14px; animation: pulse 2s infinite; }
+
+    /* ── Conn status badge ── */
+    #conn-badge {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      font-size: 0.75rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 11px;
+      z-index: 999;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.45; }
+    }
+
+    h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 8px; }
+
+    @media (max-width: 380px) {
+      body { padding: 12px 10px 40px; }
+      .room-code { font-size: 3.2rem; }
+      .active-title { font-size: 1.05rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="conn-badge">⚪ —</div>
+<div id="app"></div>
+
+<script>
+/* ══════════════════════════════════════════════
+   CONFIG
+══════════════════════════════════════════════ */
+const PUB_KEY  = 'demo';
+const SUB_KEY  = 'demo';
+const PIN      = '1234';
+const CHAN_PFX = 'lp-formazione26-'; // namespace to avoid demo-key collisions
+
+const QUESTIONS = [
+  "Arrivare 5 minuti in ritardo per un imprevisto",
+  "Rispondere al telefono mentre i bambini giocano",
+  "Dire una parolaccia alla quinta disobbedienza",
+  "Fotografare un bambino e postarlo nelle storie",
+  "Non presentarsi a una riunione per una partita di calcio",
+  "Condividere su WhatsApp un episodio buffo del gruppo",
+  "Ignorare un bambino che disturba continuamente",
+  "Coprire un collega sempre in ritardo",
+  "Alzare molto la voce per richiamare l'attenzione",
+  "Fumare nel cortile lontano dai bambini"
+];
+
+const OPTIONS = [
+  { emoji: '🟢', label: 'Ok',          colorClass: 'fill-green'  },
+  { emoji: '🟡', label: 'Dipende',     colorClass: 'fill-yellow' },
+  { emoji: '🔴', label: 'Non va bene', colorClass: 'fill-red'    }
+];
+
+/* ══════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════ */
+const S = {
+  screen:          'home',
+  role:            null,
+  roomCode:        null,
+  pubnub:          null,
+  channel:         null,
+  connected:       false,
+
+  // presenter
+  activeQ:         -1,
+  votes:           {},   // { qIndex: {0:n, 1:n, 2:n} }
+  voters:          {},   // { qIndex: Set }
+  doneQ:           new Set(),
+  heartbeatTimer:  null,
+
+  // participant
+  voterId:         null,
+  votedQ:          new Set(),
+  currentQ:        null, // { index, text }
+
+  // ui
+  error:           null,
+  pinVal:          '',
+  codeVal:         ''
+};
+
+/* ══════════════════════════════════════════════
+   UTILS
+══════════════════════════════════════════════ */
+function genCode() {
+  const c = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 4; i++) s += c[Math.floor(Math.random() * c.length)];
+  return s;
+}
+function genId() { return Math.random().toString(36).substr(2, 14); }
+
+function setConn(ok, label) {
+  S.connected = ok;
+  const el = document.getElementById('conn-badge');
+  if (el) el.textContent = ok ? '🟢 Connesso' : (label || '⚪ —');
+}
+
+/* ══════════════════════════════════════════════
+   PUBNUB
+══════════════════════════════════════════════ */
+function initPubNub(roomCode, role) {
+  const uuid    = role === 'presenter' ? ('pres-' + roomCode) : ('part-' + S.voterId);
+  const channel = CHAN_PFX + roomCode;
+  S.channel     = channel;
+
+  const pn = new PubNub({ publishKey: PUB_KEY, subscribeKey: SUB_KEY, uuid });
+  S.pubnub = pn;
+
+  pn.addListener({
+    status(st) {
+      if (st.category === 'PNConnectedCategory') {
+        setConn(true);
+        if (role === 'presenter') scheduleHeartbeat();
+      } else if (['PNNetworkDownCategory','PNNetworkIssuesCategory'].includes(st.category)) {
+        setConn(false, '🔴 Offline');
+      } else if (st.category === 'PNReconnectedCategory') {
+        setConn(true);
+      }
+    },
+    message(evt) {
+      role === 'presenter' ? onPresenterMsg(evt.message) : onParticipantMsg(evt.message);
+    }
+  });
+
+  pn.subscribe({ channels: [channel] });
+}
+
+function publish(msg) {
+  if (!S.pubnub || !S.channel) return;
+  S.pubnub.publish({ channel: S.channel, message: msg });
+}
+
+/* ── Heartbeat: presenter re-broadcasts state every 4s so late joiners catch up ── */
+function scheduleHeartbeat() {
+  if (S.heartbeatTimer) clearInterval(S.heartbeatTimer);
+  S.heartbeatTimer = setInterval(() => {
+    if (S.activeQ >= 0) {
+      publish({ type: 'q_start', qIndex: S.activeQ });
+    }
+  }, 4000);
+}
+
+/* ══════════════════════════════════════════════
+   MESSAGE HANDLERS
+══════════════════════════════════════════════ */
+function onPresenterMsg(msg) {
+  if (msg.type !== 'vote') return;
+  const { qIndex, answer, vid } = msg;
+  if (qIndex !== S.activeQ) return;
+
+  if (!S.votes[qIndex])  S.votes[qIndex]  = { 0: 0, 1: 0, 2: 0 };
+  if (!S.voters[qIndex]) S.voters[qIndex] = new Set();
+  if (S.voters[qIndex].has(vid)) return; // dedup
+
+  S.voters[qIndex].add(vid);
+  S.votes[qIndex][answer]++;
+
+  if (S.screen === 'presenter_active') renderActiveQ();
+}
+
+function onParticipantMsg(msg) {
+  if (msg.type === 'q_start') {
+    S.currentQ = { index: msg.qIndex, text: QUESTIONS[msg.qIndex] };
+    if (!S.votedQ.has(msg.qIndex)) setState('participant_question');
+  } else if (msg.type === 'q_end') {
+    if (S.screen === 'participant_question' || S.screen === 'participant_voted') {
+      S.currentQ = null;
+      setState('participant_waiting');
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════
+   RENDER ENGINE
+══════════════════════════════════════════════ */
+function setState(screen) {
+  S.screen = screen;
+  if (screen !== 'presenter_active') render();
+  else renderActiveQ();
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const screens = {
+    home:                 renderHome,
+    presenter_pin:        renderPin,
+    presenter_room:       renderRoom,
+    presenter_questions:  renderQuestions,
+    participant_code:     renderCode,
+    participant_waiting:  renderWaiting,
+    participant_question: renderQuestion,
+    participant_voted:    renderVoted
+  };
+  app.innerHTML = (screens[S.screen] || renderHome)();
+}
+
+/* ── HOME ── */
+function renderHome() { return `
+  <div class="logo">
+    <h1>🗳️ LivePoll</h1>
+    <p>Sondaggi in tempo reale</p>
+  </div>
+  <div class="card">
+    <h2 style="text-align:center;margin-bottom:18px">Chi sei?</h2>
+    <button class="btn btn-primary" onclick="chooseRole('presenter')">🎤&nbsp; Sono il Presentatore</button>
+    <button class="btn btn-secondary" onclick="chooseRole('participant')">📱&nbsp; Sono un Partecipante</button>
+  </div>`; }
+
+/* ── PRESENTER PIN ── */
+function renderPin() { return `
+  <div class="logo"><h1>🗳️ LivePoll</h1></div>
+  <div class="card">
+    <h2>PIN presentatore</h2>
+    <p style="color:var(--muted);margin-bottom:14px;font-size:0.9rem">Accesso riservato</p>
+    <input type="password" id="pin-input" placeholder="••••" maxlength="6"
+      value="${S.pinVal}"
+      oninput="S.pinVal=this.value"
+      onkeypress="if(event.key==='Enter')checkPin()">
+    ${S.error ? `<div class="error-msg">❌ ${S.error}</div>` : ''}
+    <button class="btn btn-primary" onclick="checkPin()">Accedi →</button>
+    <button class="btn btn-secondary" onclick="setState('home')">← Indietro</button>
+  </div>`; }
+
+/* ── PRESENTER ROOM ── */
+function renderRoom() {
+  const pageUrl   = window.location.href;
+  const isLocal   = pageUrl.startsWith('file://');
+  const TIINY_URL = 'https://scritchss.github.io/livepoll/livepoll.html';
+  const baseUrl   = isLocal ? TIINY_URL : pageUrl.split('?')[0];
+  const qrTarget  = baseUrl + '?mode=participant';
+  const qrImgUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=6c63ff&bgcolor=ffffff&data=' + encodeURIComponent(qrTarget);
+
+  const qrSection = isLocal
+    ? `<div class="local-warn">
+         ⚠️ File aperto in locale — QR non funzionerà sui telefoni.<br>
+         Carica su <strong>netlify.com/drop</strong> per ottenere URL reale.
+       </div>
+       <div class="qr-wrap">
+         <img src="${qrImgUrl}" alt="QR placeholder">
+         <div class="qr-label">Anteprima QR (non valido in locale)</div>
+       </div>`
+    : `<div class="qr-wrap">
+         <img src="${qrImgUrl}" alt="QR Code" onerror="this.style.display='none'">
+         <div class="qr-label">📱 Scansiona per partecipare</div>
+         <div class="qr-url">${baseUrl}</div>
+       </div>`;
+
+  return `
+  <div class="logo"><h1>🗳️ LivePoll</h1></div>
+  <div class="card" style="text-align:center">
+    ${qrSection}
+    <div class="tag" style="margin-top:8px">OPPURE DIGITA IL CODICE</div>
+    <div class="room-code">${S.roomCode}</div>
+    <p style="color:var(--muted);font-size:0.82rem;margin-bottom:14px">
+      Apri questa app → "Partecipante" → inserisci il codice
+    </p>
+    ${S.connected
+      ? `<p style="color:var(--green);margin-bottom:14px">✅ Connesso e pronto</p>`
+      : `<p style="color:var(--yellow);margin-bottom:14px">⏳ Connessione in corso...</p>`}
+    <button class="btn btn-primary" onclick="setState('presenter_questions')">Vai alle domande →</button>
+  </div>`; }
+
+/* ── PRESENTER QUESTIONS ── */
+function renderQuestions() {
+  const rows = QUESTIONS.map((q, i) => `
+    <div class="question-item">
+      <div class="q-num ${S.doneQ.has(i) ? 'done' : ''}">${S.doneQ.has(i) ? '✓' : i+1}</div>
+      <div class="q-text">${q}</div>
+      <button class="btn-avvia" onclick="startQ(${i})">▶ Avvia</button>
+    </div>`).join('');
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2>📋 Domande</h2>
+      <span style="color:var(--muted);font-size:0.88rem">Sala: <strong style="color:var(--accent)">${S.roomCode}</strong></span>
+    </div>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:10px">${S.doneQ.size}/${QUESTIONS.length} completate</p>
+    <div class="card" style="padding:14px 18px">${rows}</div>`; }
+
+/* ── ACTIVE QUESTION (presenter live results) ── */
+function renderActiveQ() {
+  const qi     = S.activeQ;
+  const v      = S.votes[qi] || { 0:0, 1:0, 2:0 };
+  const total  = v[0] + v[1] + v[2];
+  const pct    = n => total > 0 ? Math.round(n / total * 100) : 0;
+
+  const bars = OPTIONS.map((o, i) => `
+    <div class="bar-wrap">
+      <div class="bar-label">
+        <span>${o.emoji} ${o.label}</span>
+        <span>${v[i]} voti &nbsp;(${pct(v[i])}%)</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill ${o.colorClass}" style="width:${pct(v[i])}%"></div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="color:var(--muted);font-size:0.88rem">Sala: <strong style="color:var(--accent)">${S.roomCode}</strong></span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="live-badge">● LIVE</span>
+        <button class="btn-fs" onclick="toggleFS()" title="Schermo intero">⛶</button>
+      </div>
+    </div>
+    <div class="active-card">
+      <div class="tag">DOMANDA ${qi+1} / ${QUESTIONS.length}</div>
+      <div class="active-title">${QUESTIONS[qi]}</div>
+      ${bars}
+      <div class="vote-total">${total} vot${total===1?'o':'i'} ricevut${total===1?'o':'i'}</div>
+    </div>
+    <button class="btn btn-danger" onclick="endQ()">■ Termina domanda</button>
+    <button class="btn btn-secondary" onclick="setState('presenter_questions')">← Lista domande (non termina)</button>`; }
+
+/* ── PARTICIPANT CODE ── */
+function renderCode() { return `
+  <div class="logo">
+    <h1>🗳️ LivePoll</h1>
+    <p>Sondaggi in tempo reale</p>
+  </div>
+  <div class="card">
+    <h2>Codice sala</h2>
+    <p style="color:var(--muted);margin-bottom:14px;font-size:0.9rem">Chiedi il codice al presentatore</p>
+    <input type="text" id="code-input" placeholder="ES. AB3F" maxlength="4"
+      value="${S.codeVal}"
+      oninput="S.codeVal=this.value.toUpperCase();this.value=S.codeVal"
+      onkeypress="if(event.key==='Enter')joinRoom()">
+    ${S.error ? `<div class="error-msg">❌ ${S.error}</div>` : ''}
+    <button class="btn btn-primary" onclick="joinRoom()">Entra →</button>
+    <button class="btn btn-secondary" onclick="setState('home')">← Indietro</button>
+  </div>`; }
+
+/* ── PARTICIPANT WAITING ── */
+function renderWaiting() { return `
+  <div class="card">
+    <div class="waiting">
+      <div class="waiting-icon">⏳</div>
+      <h2>In attesa del sondaggio</h2>
+      <p style="color:var(--muted);margin-top:6px">Sala: <strong style="color:var(--accent)">${S.roomCode}</strong></p>
+      <p style="color:var(--muted);margin-top:14px;font-size:0.9rem">
+        Il presentatore avvierà la prossima domanda a breve...
+      </p>
+    </div>
+  </div>
+  <div class="card" style="background:transparent;border-style:dashed">
+    <div class="progress">
+      ${QUESTIONS.map((_,i) => `
+        <div class="pdot ${S.votedQ.has(i)?'done':''}">${S.votedQ.has(i)?'✓':i+1}</div>`).join('')}
+    </div>
+    <p style="color:var(--muted);font-size:0.85rem">${S.votedQ.size}/${QUESTIONS.length} risposte date</p>
+  </div>`; }
+
+/* ── PARTICIPANT QUESTION ── */
+function renderQuestion() {
+  if (!S.currentQ) return renderWaiting();
+  const q = S.currentQ;
+  return `
+    <div class="card">
+      <div class="tag">DOMANDA ${q.index+1} / ${QUESTIONS.length}</div>
+      <h2 style="font-size:1.15rem;line-height:1.5;font-weight:700;margin-bottom:22px">${q.text}</h2>
+      ${OPTIONS.map((o,i) => `
+        <button class="answer-btn" onclick="submitVote(${i})">
+          <span class="em">${o.emoji}</span>
+          <span>${o.label}</span>
+        </button>`).join('')}
+    </div>`; }
+
+/* ── PARTICIPANT VOTED ── */
+function renderVoted() { return `
+  <div class="card">
+    <div class="waiting">
+      <div style="font-size:3.8rem;margin-bottom:14px">✅</div>
+      <h2>Risposta inviata!</h2>
+      <p style="color:var(--muted);margin-top:8px">Attendi la prossima domanda...</p>
+    </div>
+  </div>`; }
+
+/* ══════════════════════════════════════════════
+   ACTIONS
+══════════════════════════════════════════════ */
+function chooseRole(role) {
+  S.role  = role;
+  S.error = null;
+  if (role === 'presenter') {
+    setState('presenter_pin');
+  } else {
+    S.voterId = genId();
+    setState('participant_code');
+  }
+}
+
+function checkPin() {
+  const el  = document.getElementById('pin-input');
+  const val = el ? el.value : S.pinVal;
+  if (val === PIN) {
+    S.error    = null;
+    S.roomCode = genCode();
+    S.votes    = {};
+    S.voters   = {};
+    S.doneQ    = new Set();
+    S.activeQ  = -1;
+    setState('presenter_room');
+    initPubNub(S.roomCode, 'presenter');
+  } else {
+    S.error = 'PIN non corretto';
+    setState('presenter_pin');
+  }
+}
+
+function startQ(qIndex) {
+  S.activeQ = qIndex;
+  if (!S.votes[qIndex])  S.votes[qIndex]  = { 0:0, 1:0, 2:0 };
+  if (!S.voters[qIndex]) S.voters[qIndex] = new Set();
+  publish({ type: 'q_start', qIndex });
+  setState('presenter_active');
+}
+
+function endQ() {
+  const qi = S.activeQ;
+  publish({ type: 'q_end', qIndex: qi });
+  S.doneQ.add(qi);
+  S.activeQ = -1;
+  setState('presenter_questions');
+}
+
+function joinRoom() {
+  const el   = document.getElementById('code-input');
+  const code = (el ? el.value : S.codeVal).toUpperCase().trim();
+  if (code.length !== 4) {
+    S.error = 'Il codice deve essere 4 caratteri';
+    setState('participant_code');
+    return;
+  }
+  S.roomCode = code;
+  S.error    = null;
+  S.votedQ   = new Set();
+  S.currentQ = null;
+  initPubNub(code, 'participant');
+  setState('participant_waiting');
+}
+
+function submitVote(answerIndex) {
+  const q = S.currentQ;
+  if (!q) return;
+  publish({ type: 'vote', qIndex: q.index, answer: answerIndex, vid: S.voterId });
+  S.votedQ.add(q.index);
+  setState('participant_voted');
+  setTimeout(() => {
+    if (S.screen === 'participant_voted') setState('participant_waiting');
+  }, 2200);
+}
+
+/* ══════════════════════════════════════════════
+   FULLSCREEN
+══════════════════════════════════════════════ */
+function toggleFS() {
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    const el = document.documentElement;
+    if (el.requestFullscreen)       el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  } else {
+    if (document.exitFullscreen)       document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+}
+
+// aggiorna icona bottone al cambio stato fullscreen
+document.addEventListener('fullscreenchange', updateFsBtn);
+document.addEventListener('webkitfullscreenchange', updateFsBtn);
+function updateFsBtn() {
+  const btn = document.querySelector('.btn-fs');
+  if (!btn) return;
+  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  btn.textContent = isFs ? '✕' : '⛶';
+  btn.title = isFs ? 'Esci da schermo intero' : 'Schermo intero';
+}
+
+/* ══════════════════════════════════════════════
+   BOOT — rileva ?mode=participant nel URL
+══════════════════════════════════════════════ */
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('mode') === 'participant') {
+    S.role    = 'participant';
+    S.voterId = genId();
+    S.screen  = 'participant_code';
+  }
+})();
+render();
+</script>
+</body>
+</html>
