@@ -256,26 +256,27 @@
       background: var(--card);
       border: 2px solid var(--accent);
       border-radius: 20px;
-      padding: 28px 32px;
+      padding: 32px 40px;
       text-align: center;
-      max-width: 320px;
-      width: 90%;
+      max-width: 480px;
+      width: 95%;
     }
     .qr-overlay-box img {
-      width: 180px;
-      height: 180px;
-      border-radius: 10px;
-      border: 3px solid var(--accent);
+      width: 300px;
+      height: 300px;
+      border-radius: 12px;
+      border: 4px solid var(--accent);
       background: #fff;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
     .qr-overlay-code {
-      font-size: 2.8rem;
+      font-size: 4rem;
       font-weight: 900;
-      letter-spacing: 0.3em;
+      letter-spacing: 0.35em;
       color: var(--accent);
       font-family: 'Courier New', monospace;
       margin-bottom: 6px;
+      text-shadow: 0 0 20px rgba(108,99,255,0.5);
     }
     .qr-overlay-close {
       margin-top: 16px;
@@ -523,6 +524,7 @@ function initPubNub(roomCode, role) {
         setConn(false, '🔴 Offline');
       } else if (st.category === 'PNReconnectedCategory') {
         setConn(true);
+        if (role === 'presenter') scheduleHeartbeat(); // riprende heartbeat dopo riconnessione
       }
     },
     message(evt) {
@@ -568,8 +570,10 @@ function onPresenterMsg(msg) {
 
 function onParticipantMsg(msg) {
   if (msg.type === 'q_start') {
-    S.currentQ = { index: msg.qIndex, text: QUESTIONS[msg.qIndex] };
-    if (!S.votedQ.has(msg.qIndex)) setState('participant_question');
+    const qi = msg.qIndex;
+    if (typeof qi !== 'number' || qi < 0 || qi >= QUESTIONS.length) return;
+    S.currentQ = { index: qi, text: QUESTIONS[qi] };
+    if (!S.votedQ.has(qi)) setState('participant_question');
   } else if (msg.type === 'q_end') {
     if (S.screen === 'participant_question' || S.screen === 'participant_voted') {
       S.currentQ = null;
@@ -682,11 +686,17 @@ function renderQuestions() {
       <span style="color:var(--muted);font-size:0.88rem">Sala: <strong style="color:var(--accent)">${S.roomCode}</strong></span>
     </div>
     <p style="color:var(--muted);font-size:0.85rem;margin-bottom:10px">${S.doneQ.size}/${QUESTIONS.length} completate</p>
-    <div class="card" style="padding:14px 18px">${rows}</div>`; }
+    <div class="card" style="padding:14px 18px">${rows}</div>
+    ${S.doneQ.size > 0 ? `
+    <button class="btn btn-secondary" onclick="downloadCSV()" style="margin-top:4px;border:1px solid var(--green);color:var(--green)">
+      ⬇ Scarica risultati (.csv)
+    </button>` : ''}
+    `; }
 
 /* ── ACTIVE QUESTION (presenter live results) ── */
 function renderActiveQ() {
   const qi     = S.activeQ;
+  if (qi < 0 || qi >= QUESTIONS.length) { setState('presenter_questions'); return; }
   const v      = S.votes[qi] || { 0:0, 1:0, 2:0 };
   const total  = v[0] + v[1] + v[2];
   const pct    = n => total > 0 ? Math.round(n / total * 100) : 0;
@@ -859,6 +869,26 @@ function submitVote(answerIndex) {
 }
 
 /* ══════════════════════════════════════════════
+   DOWNLOAD CSV
+══════════════════════════════════════════════ */
+function downloadCSV() {
+  const rows = [['#', 'Domanda', '🟢 Ok', '🟡 Dipende', '🔴 Non va bene', 'Totale']];
+  QUESTIONS.forEach((q, i) => {
+    const v     = S.votes[i] || { 0:0, 1:0, 2:0 };
+    const total = v[0] + v[1] + v[2];
+    rows.push([i + 1, `"${q}"`, v[0], v[1], v[2], total]);
+  });
+  const csv     = rows.map(r => r.join(',')).join('\n');
+  const blob    = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = 'livepoll-risultati-' + S.roomCode + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ══════════════════════════════════════════════
    QR OVERLAY
 ══════════════════════════════════════════════ */
 function toggleQR() {
@@ -868,7 +898,7 @@ function toggleQR() {
     const pageUrl  = window.location.href;
     const baseUrl  = pageUrl.split('?')[0];
     const qrUrl    = baseUrl + '?mode=participant';
-    const qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=6c63ff&bgcolor=ffffff&data=' + encodeURIComponent(qrUrl);
+    const qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&color=6c63ff&bgcolor=ffffff&data=' + encodeURIComponent(qrUrl);
     document.getElementById('qr-overlay-img').src  = qrImgUrl;
     document.getElementById('qr-overlay-code').textContent = S.roomCode || '';
   }
