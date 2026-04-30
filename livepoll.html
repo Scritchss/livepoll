@@ -708,7 +708,7 @@ function renderActiveQ() {
       <div style="display:flex;align-items:center;gap:8px">
         <span class="live-badge">● LIVE</span>
         <button class="btn-fs" onclick="toggleQR()" title="Mostra QR">📱</button>
-        <button class="btn-fs" onclick="toggleFS()" title="Schermo intero">⛶</button>
+        <button class="btn-fs" id="btn-fs-toggle" onclick="toggleFS()" title="Schermo intero">⛶</button>
       </div>
     </div>
     <div class="active-card">
@@ -893,7 +893,7 @@ function toggleFS() {
 document.addEventListener('fullscreenchange', updateFsBtn);
 document.addEventListener('webkitfullscreenchange', updateFsBtn);
 function updateFsBtn() {
-  const btn = document.querySelector('.btn-fs');
+  const btn = document.getElementById('btn-fs-toggle');
   if (!btn) return;
   const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
   btn.textContent = isFs ? '✕' : '⛶';
